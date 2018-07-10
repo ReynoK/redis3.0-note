@@ -122,11 +122,11 @@ static void zmalloc_default_oom(size_t size) {
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
 void *zmalloc(size_t size) {
-    void *ptr = malloc(size+PREFIX_SIZE);
+    void *ptr = malloc(size+PREFIX_SIZE);           //PREFIX_SIZE用来存储所分配的字符串长度
 
     if (!ptr) zmalloc_oom_handler(size);
 #ifdef HAVE_MALLOC_SIZE
-    update_zmalloc_stat_alloc(zmalloc_size(ptr));
+    update_zmalloc_stat_alloc(zmalloc_size(ptr));   //通过zmalloc_size来获取实际分配的内存大小（8字节对齐），然后更新总的已分配内存大小
     return ptr;
 #else
     *((size_t*)ptr) = size;
@@ -135,6 +135,7 @@ void *zmalloc(size_t size) {
 #endif
 }
 
+//calloc与malloc的区别在于calloc会将所分配的块全部置为0
 void *zcalloc(size_t size) {
     void *ptr = calloc(1, size+PREFIX_SIZE);
 
@@ -168,7 +169,7 @@ void *zrealloc(void *ptr, size_t size) {
 #else
     realptr = (char*)ptr-PREFIX_SIZE;
     oldsize = *((size_t*)realptr);
-    newptr = realloc(realptr,size+PREFIX_SIZE);
+    newptr = realloc(realptr,size+PREFIX_SIZE);     //realloc 更改分配内存块的大小
     if (!newptr) zmalloc_oom_handler(size);
 
     *((size_t*)newptr) = size;
@@ -183,10 +184,11 @@ void *zrealloc(void *ptr, size_t size) {
  * information as the first bytes of every allocation. */
 #ifndef HAVE_MALLOC_SIZE
 size_t zmalloc_size(void *ptr) {
-    void *realptr = (char*)ptr-PREFIX_SIZE;
+    void *realptr = (char*)ptr-PREFIX_SIZE; //PREFIX_SIZE用来记录实际申请的长度，后续用于统计已分配内存有极大帮助，尤其是调用free之后
     size_t size = *((size_t*)realptr);
     /* Assume at least that all the allocations are padded at sizeof(long) by
      * the underlying allocator. */
+    // if(size&7) 表示n不是8的倍数，需要补齐，因为malloc都是8位对齐的
     if (size&(sizeof(long)-1)) size += sizeof(long)-(size&(sizeof(long)-1));
     return size+PREFIX_SIZE;
 }
@@ -203,12 +205,12 @@ void zfree(void *ptr) {
     update_zmalloc_stat_free(zmalloc_size(ptr));
     free(ptr);
 #else
-    realptr = (char*)ptr-PREFIX_SIZE;
+    realptr = (char*)ptr-PREFIX_SIZE;          //回退到最初malloc回退的地址
     oldsize = *((size_t*)realptr);
     update_zmalloc_stat_free(oldsize+PREFIX_SIZE);
     free(realptr);
 #endif
-}
+}  
 
 char *zstrdup(const char *s) {
     size_t l = strlen(s)+1;
