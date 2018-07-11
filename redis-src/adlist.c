@@ -38,6 +38,7 @@
  * by the user before to call AlFreeList().
  *
  * On error, NULL is returned. Otherwise the pointer to the new list. */
+//创建链表对象
 list *listCreate(void)
 {
     struct list *list;
@@ -55,6 +56,7 @@ list *listCreate(void)
 /* Free the whole list.
  *
  * This function can't fail. */
+//释放整个链表
 void listRelease(list *list)
 {
     unsigned long len;
@@ -77,6 +79,7 @@ void listRelease(list *list)
  * On error, NULL is returned and no operation is performed (i.e. the
  * list remains unaltered).
  * On success the 'list' pointer you pass to the function is returned. */
+//添加新元素到链表头部
 list *listAddNodeHead(list *list, void *value)
 {
     listNode *node;
@@ -84,13 +87,14 @@ list *listAddNodeHead(list *list, void *value)
     if ((node = zmalloc(sizeof(*node))) == NULL)
         return NULL;
     node->value = value;
+    //要考虑原链表无节点的情况
     if (list->len == 0) {
         list->head = list->tail = node;
         node->prev = node->next = NULL;
     } else {
         node->prev = NULL;
         node->next = list->head;
-        list->head->prev = node;
+        list->head->prev = node;        //还要改变原头部节点的pre指针
         list->head = node;
     }
     list->len++;
@@ -103,6 +107,7 @@ list *listAddNodeHead(list *list, void *value)
  * On error, NULL is returned and no operation is performed (i.e. the
  * list remains unaltered).
  * On success the 'list' pointer you pass to the function is returned. */
+//添加元素到链表尾部
 list *listAddNodeTail(list *list, void *value)
 {
     listNode *node;
@@ -110,6 +115,7 @@ list *listAddNodeTail(list *list, void *value)
     if ((node = zmalloc(sizeof(*node))) == NULL)
         return NULL;
     node->value = value;
+    //要考虑节点长度为0的情况
     if (list->len == 0) {
         list->head = list->tail = node;
         node->prev = node->next = NULL;
@@ -123,6 +129,7 @@ list *listAddNodeTail(list *list, void *value)
     return list;
 }
 
+//插入值到指定节点位置，after表示之前，还是之后。需要传入list，因为可能涉及头部、尾部节点的更改
 list *listInsertNode(list *list, listNode *old_node, void *value, int after) {
     listNode *node;
 
@@ -132,12 +139,15 @@ list *listInsertNode(list *list, listNode *old_node, void *value, int after) {
     if (after) {
         node->prev = old_node;
         node->next = old_node->next;
+        //考虑尾部节点的场景
         if (list->tail == old_node) {
             list->tail = node;
         }
     } else {
+        //插入到节点之前
         node->next = old_node;
         node->prev = old_node->prev;
+        //考虑头部节点的情况
         if (list->head == old_node) {
             list->head = node;
         }
@@ -158,14 +168,16 @@ list *listInsertNode(list *list, listNode *old_node, void *value, int after) {
  * This function can't fail. */
 void listDelNode(list *list, listNode *node)
 {
+    //非头部节点
     if (node->prev)
         node->prev->next = node->next;
     else
-        list->head = node->next;
+        list->head = node->next;        //头部
+    //非尾部    
     if (node->next)
         node->next->prev = node->prev;
     else
-        list->tail = node->prev;
+        list->tail = node->prev;        //尾部
     if (list->free) list->free(node->value);
     zfree(node);
     list->len--;
@@ -175,30 +187,34 @@ void listDelNode(list *list, listNode *node)
  * call to listNext() will return the next element of the list.
  *
  * This function can't fail. */
+//获取遍历迭代器，设计模式？
 listIter *listGetIterator(list *list, int direction)
 {
     listIter *iter;
 
     if ((iter = zmalloc(sizeof(*iter))) == NULL) return NULL;
-    if (direction == AL_START_HEAD)
+    if (direction == AL_START_HEAD)     //正向遍历
         iter->next = list->head;
     else
-        iter->next = list->tail;
+        iter->next = list->tail;        //反向遍历
     iter->direction = direction;
     return iter;
 }
 
 /* Release the iterator memory */
+//释放迭代器
 void listReleaseIterator(listIter *iter) {
     zfree(iter);
 }
 
 /* Create an iterator in the list private iterator structure */
+//重置迭代器
 void listRewind(list *list, listIter *li) {
     li->next = list->head;
     li->direction = AL_START_HEAD;
 }
 
+//重置反向迭代器
 void listRewindTail(list *list, listIter *li) {
     li->next = list->tail;
     li->direction = AL_START_TAIL;
@@ -218,6 +234,7 @@ void listRewindTail(list *list, listIter *li) {
  * }
  *
  * */
+//迭代，获取迭代器指向的下一个元素
 listNode *listNext(listIter *iter)
 {
     listNode *current = iter->next;
