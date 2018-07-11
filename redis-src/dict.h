@@ -44,17 +44,19 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+//哈希表节点
 typedef struct dictEntry {
-    void *key;
-    union {
+    void *key;              //字典中的key
+    union {                 //union结构体，字典中的值，可以为一个指针、无符号整型，有符号整型
         void *val;
         uint64_t u64;
         int64_t s64;
         double d;
     } v;
-    struct dictEntry *next;
+    struct dictEntry *next; //键冲突的形成一个链表结构
 } dictEntry;
 
+//类型特定函数
 typedef struct dictType {
     unsigned int (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
@@ -66,19 +68,21 @@ typedef struct dictType {
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
+//hash table 哈希表
 typedef struct dictht {
-    dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
-    unsigned long used;
+    dictEntry **table;      //哈希表节点指针数组
+    unsigned long size;     //哈希表大小
+    unsigned long sizemask; //哈希表掩码，sizemask = size - 1
+    unsigned long used;     //已有节点数量
 } dictht;
 
+//字典
 typedef struct dict {
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-    int iterators; /* number of iterators currently running */
+    dictType *type;         // 类型特定函数结构指针
+    void *privdata;         // 私有数据，调用dictType中函数的时候需要传入   
+    dictht ht[2];           // 哈希表，dictht[0]用来存储数据，dictht[1]用来rehash是重新使用
+    long rehashidx; /* rehashing not in progress if rehashidx == -1 */      //记录rehash到哪一个哈希表节点（类似于数组index）
+    int iterators; /* number of iterators currently running */              //正在运行的迭代器数量
 } dict;
 
 /* If safe is set to 1 this is a safe iterator, that means, you can call
@@ -100,51 +104,52 @@ typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 #define DICT_HT_INITIAL_SIZE     4
 
 /* ------------------------------- Macros ------------------------------------*/
+//释放字典的value
 #define dictFreeVal(d, entry) \
     if ((d)->type->valDestructor) \
         (d)->type->valDestructor((d)->privdata, (entry)->v.val)
-
+//设置字典的值
 #define dictSetVal(d, entry, _val_) do { \
     if ((d)->type->valDup) \
         entry->v.val = (d)->type->valDup((d)->privdata, _val_); \
     else \
         entry->v.val = (_val_); \
 } while(0)
-
+//设定字典的值，类型为 int64_t
 #define dictSetSignedIntegerVal(entry, _val_) \
     do { entry->v.s64 = _val_; } while(0)
-
+//设定字典的值，类型为 uint64_t
 #define dictSetUnsignedIntegerVal(entry, _val_) \
     do { entry->v.u64 = _val_; } while(0)
-
+//设定字典的值，类型为 double
 #define dictSetDoubleVal(entry, _val_) \
     do { entry->v.d = _val_; } while(0)
-
+//释放字典的键
 #define dictFreeKey(d, entry) \
     if ((d)->type->keyDestructor) \
         (d)->type->keyDestructor((d)->privdata, (entry)->key)
-
+//设置字典的值
 #define dictSetKey(d, entry, _key_) do { \
     if ((d)->type->keyDup) \
         entry->key = (d)->type->keyDup((d)->privdata, _key_); \
     else \
         entry->key = (_key_); \
 } while(0)
-
+//比较字典的键
 #define dictCompareKeys(d, key1, key2) \
     (((d)->type->keyCompare) ? \
         (d)->type->keyCompare((d)->privdata, key1, key2) : \
         (key1) == (key2))
 
-#define dictHashKey(d, key) (d)->type->hashFunction(key)
-#define dictGetKey(he) ((he)->key)
-#define dictGetVal(he) ((he)->v.val)
-#define dictGetSignedIntegerVal(he) ((he)->v.s64)
-#define dictGetUnsignedIntegerVal(he) ((he)->v.u64)
-#define dictGetDoubleVal(he) ((he)->v.d)
-#define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
-#define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
-#define dictIsRehashing(d) ((d)->rehashidx != -1)
+#define dictHashKey(d, key) (d)->type->hashFunction(key)        //获取hash key
+#define dictGetKey(he) ((he)->key)                              //获取字典key
+#define dictGetVal(he) ((he)->v.val)                            //获取字典 值
+#define dictGetSignedIntegerVal(he) ((he)->v.s64)               //获取字典 值 int64_t 类型
+#define dictGetUnsignedIntegerVal(he) ((he)->v.u64)             //获取字典 值 uint64_t 类型
+#define dictGetDoubleVal(he) ((he)->v.d)                        //获取字典 值 double 类型
+#define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)          //获取字典占用空间
+#define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)           //获取字典实际使用的空间
+#define dictIsRehashing(d) ((d)->rehashidx != -1)               //判断当前是否在hash阶段
 
 /* API */
 dict *dictCreate(dictType *type, void *privDataPtr);
