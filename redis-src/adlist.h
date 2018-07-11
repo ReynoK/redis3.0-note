@@ -36,7 +36,7 @@
 typedef struct listNode {
     struct listNode *prev;  //指向前一个节点，头节点，该值为null
     struct listNode *next;  //指向后一个节点，尾节点，指向后一个null
-    void *value;            //可以存储任意类型的值。同一链表的类型是一样的？
+    void *value;            //可以存储任意类型的值的地址。同一链表的类型是一样的？
 } listNode;
 
 //迭代器
@@ -49,7 +49,7 @@ typedef struct listIter {
 typedef struct list {
     listNode *head;         //指向头结点地址
     listNode *tail;         //指向尾节点地址
-    void *(*dup)(void *ptr);    //复制节点函数指针
+    void *(*dup)(void *ptr);    //复制节点 值 函数指针
     void (*free)(void *ptr);    //释放节点函数指针
     int (*match)(void *ptr, void *key); 
     unsigned long len;          //记录链表长度，O(1)获取

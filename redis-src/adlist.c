@@ -256,6 +256,11 @@ listNode *listNext(listIter *iter)
  * the original node is used as value of the copied node.
  *
  * The original list both on success or error is never modified. */
+//链表复制函数
+/*
+注意点：1. 使用list->dup函数复制值，若不存在则新链表与旧链表共用value
+       2. 中间若有分配空间失败，要释放已分配的链表空间
+*/
 list *listDup(list *orig)
 {
     list *copy;
@@ -299,6 +304,7 @@ list *listDup(list *orig)
  * On success the first matching node pointer is returned
  * (search starts from head). If no matching node exists
  * NULL is returned. */
+//在链表中寻找指定值，不存在返回null，O(N)
 listNode *listSearchKey(list *list, void *key)
 {
     listIter *iter;
@@ -306,13 +312,13 @@ listNode *listSearchKey(list *list, void *key)
 
     iter = listGetIterator(list, AL_START_HEAD);
     while((node = listNext(iter)) != NULL) {
-        if (list->match) {
+        if (list->match) {      //若存在match函数，则使用match函数比较
             if (list->match(node->value, key)) {
                 listReleaseIterator(iter);
                 return node;
             }
         } else {
-            if (key == node->value) {
+            if (key == node->value) {       //否则，直接比较两者
                 listReleaseIterator(iter);
                 return node;
             }
@@ -327,6 +333,7 @@ listNode *listSearchKey(list *list, void *key)
  * and so on. Negative integers are used in order to count
  * from the tail, -1 is the last element, -2 the penultimate
  * and so on. If the index is out of range NULL is returned. */
+//返回指定位置的元素，O(N)
 listNode *listIndex(list *list, long index) {
     listNode *n;
 
@@ -342,6 +349,7 @@ listNode *listIndex(list *list, long index) {
 }
 
 /* Rotate the list removing the tail node and inserting it to the head. */
+//将尾节点转移到头部节点，主要操作尾节点指针的变换
 void listRotate(list *list) {
     listNode *tail = list->tail;
 
