@@ -68,6 +68,7 @@ static int _dictInit(dict *ht, dictType *type, void *privDataPtr);
 /* -------------------------- hash functions -------------------------------- */
 
 /* Thomas Wang's 32 bit Mix Function */
+//整数key hash 算法
 unsigned int dictIntHashFunction(unsigned int key)
 {
     key += ~(key << 15);
@@ -100,6 +101,7 @@ uint32_t dictGetHashFunctionSeed(void) {
  * 2. It will not produce the same results on little-endian and big-endian
  *    machines.
  */
+//MurmurHash2 哈希算法
 unsigned int dictGenHashFunction(const void *key, int len) {
     /* 'm' and 'r' are mixing constants generated offline.
      They're not really 'magic', they just happen to work well.  */
@@ -143,6 +145,7 @@ unsigned int dictGenHashFunction(const void *key, int len) {
     return (unsigned int)h;
 }
 
+//字符串哈希算法
 /* And a case insensitive hash function (based on djb hash) */
 unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
     unsigned int hash = (unsigned int)dict_hash_function_seed;
@@ -156,6 +159,7 @@ unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
 
 /* Reset a hash table already initialized with ht_init().
  * NOTE: This function should only be called by ht_destroy(). */
+//重置dictht
 static void _dictReset(dictht *ht)
 {
     ht->table = NULL;
@@ -165,6 +169,7 @@ static void _dictReset(dictht *ht)
 }
 
 /* Create a new hash table */
+//创建一个字典，需要重置dictht
 dict *dictCreate(dictType *type,
         void *privDataPtr)
 {
@@ -175,6 +180,7 @@ dict *dictCreate(dictType *type,
 }
 
 /* Initialize the hash table */
+//重置dict
 int _dictInit(dict *d, dictType *type,
         void *privDataPtr)
 {
@@ -189,6 +195,7 @@ int _dictInit(dict *d, dictType *type,
 
 /* Resize the table to the minimal size that contains all the elements,
  * but with the invariant of a USED/BUCKETS ratio near to <= 1 */
+ //重新设置table的大小，使得其负载因子小于1，通常在rehash之前调用，调整dictht[1]
 int dictResize(dict *d)
 {
     int minimal;
@@ -201,14 +208,15 @@ int dictResize(dict *d)
 }
 
 /* Expand or create the hash table */
+//实际扩大dict
 int dictExpand(dict *d, unsigned long size)
 {
     dictht n; /* the new hash table */
-    unsigned long realsize = _dictNextPower(size);
+    unsigned long realsize = _dictNextPower(size);      //获得resize 的新大小
 
     /* the size is invalid if it is smaller than the number of
      * elements already inside the hash table */
-    if (dictIsRehashing(d) || d->ht[0].used > size)
+    if (dictIsRehashing(d) || d->ht[0].used > size) //当旧表的used > new size 时，才会金额
         return DICT_ERR;
 
     /* Rehashing to the same table size is not useful. */
@@ -216,7 +224,7 @@ int dictExpand(dict *d, unsigned long size)
 
     /* Allocate the new hash table and initialize all pointers to NULL */
     n.size = realsize;
-    n.sizemask = realsize-1;
+    n.sizemask = realsize-1;  
     n.table = zcalloc(realsize*sizeof(dictEntry*));
     n.used = 0;
 
@@ -947,6 +955,7 @@ static unsigned long _dictNextPower(unsigned long size)
     unsigned long i = DICT_HT_INITIAL_SIZE;
 
     if (size >= LONG_MAX) return LONG_MAX;
+    //以2的n次方倍扩张
     while(1) {
         if (i >= size)
             return i;
