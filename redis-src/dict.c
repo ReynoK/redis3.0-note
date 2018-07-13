@@ -239,7 +239,7 @@ int dictExpand(dict *d, unsigned long size)
 
     /* Prepare a second hash table for incremental rehashing */
     d->ht[1] = n;
-    d->rehashidx = 0;
+    d->rehashidx = 0;           //准备rehash
     return DICT_OK;
 }
 
@@ -546,6 +546,7 @@ void *dictFetchValue(dict *d, const void *key) {
  * the fingerprint again when the iterator is released.
  * If the two fingerprints are different it means that the user of the iterator
  * performed forbidden operations against the dictionary while iterating. */
+//如果指纹不一致，说明在在迭代过程中进行了rehash
 long long dictFingerprint(dict *d) {
     long long integers[6], hash = 0;
     int j;
@@ -578,6 +579,7 @@ long long dictFingerprint(dict *d) {
     return hash;
 }
 
+//创建一个迭代器
 dictIterator *dictGetIterator(dict *d)
 {
     dictIterator *iter = zmalloc(sizeof(*iter));
@@ -590,14 +592,14 @@ dictIterator *dictGetIterator(dict *d)
     iter->nextEntry = NULL;
     return iter;
 }
-
+//获取一个安全迭代器
 dictIterator *dictGetSafeIterator(dict *d) {
     dictIterator *i = dictGetIterator(d);
 
     i->safe = 1;
     return i;
 }
-
+//遍历迭代器
 dictEntry *dictNext(dictIterator *iter)
 {
     while (1) {
@@ -605,7 +607,7 @@ dictEntry *dictNext(dictIterator *iter)
             dictht *ht = &iter->d->ht[iter->table];
             if (iter->index == -1 && iter->table == 0) {
                 if (iter->safe)
-                    iter->d->iterators++;
+                    iter->d->iterators++;           //安全迭代器会添加dict的iterators，如果iterators>0，则在迭代过程不会（或停止）rehash
                 else
                     iter->fingerprint = dictFingerprint(iter->d);
             }
@@ -639,7 +641,7 @@ void dictReleaseIterator(dictIterator *iter)
         if (iter->safe)
             iter->d->iterators--;
         else
-            assert(iter->fingerprint == dictFingerprint(iter->d));
+            assert(iter->fingerprint == dictFingerprint(iter->d));          //非安全迭代器在指纹变更的情况下回抛异常
     }
     zfree(iter);
 }
@@ -758,6 +760,7 @@ unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count) {
             if (he == NULL) {
                 emptylen++;
                 if (emptylen >= 5 && emptylen > count) {
+                    //如果桶空则计数，超过一定阈值，则随机指定i
                     i = random() & maxsizemask;
                     emptylen = 0;
                 }
@@ -766,6 +769,7 @@ unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count) {
                 while (he) {
                     /* Collect all the elements of the buckets found non
                      * empty while iterating. */
+                    //如果bucket元素非空，则取完所有元素
                     *des = he;
                     des++;
                     he = he->next;
