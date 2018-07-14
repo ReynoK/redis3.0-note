@@ -43,7 +43,7 @@ list *listCreate(void)
 {
     struct list *list;
 
-    if ((list = zmalloc(sizeof(*list))) == NULL)
+    if ((list = zmalloc(sizeof(*list))) == NULL)        //创建list
         return NULL;
     list->head = list->tail = NULL;
     list->len = 0;
@@ -64,13 +64,13 @@ void listRelease(list *list)
 
     current = list->head;
     len = list->len;
-    while(len--) {
+    while(len--) {              //一个个的释放listNode
         next = current->next;
         if (list->free) list->free(current->value);
         zfree(current);
         current = next;
     }
-    zfree(list);
+    zfree(list);                //释放list
 }
 
 /* Add a new node to the list, to head, containing the specified 'value'
@@ -187,7 +187,7 @@ void listDelNode(list *list, listNode *node)
  * call to listNext() will return the next element of the list.
  *
  * This function can't fail. */
-//获取遍历迭代器，设计模式？
+//获取遍历迭代器
 listIter *listGetIterator(list *list, int direction)
 {
     listIter *iter;

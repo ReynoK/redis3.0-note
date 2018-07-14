@@ -146,7 +146,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     if (newlen < SDS_MAX_PREALLOC)      //预分配策略，若新字符长度小于1M，则为字符串分配2倍所需空间的大小
         newlen *= 2;
     else
-        newlen += SDS_MAX_PREALLOC;     //否则，只新添1M未使用空间
+        newlen += SDS_MAX_PREALLOC;     //否则，只额外添加1M未使用空间
     newsh = zrealloc(sh, sizeof(struct sdshdr)+newlen+1);
     if (newsh == NULL) return NULL;
 
