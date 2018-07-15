@@ -284,7 +284,7 @@ uint32_t intsetLen(intset *is) {
 }
 
 /* Return intset blob size in bytes. */
-//获取集合占用内存大小
+//获取集合占用内存大小   
 size_t intsetBlobLen(intset *is) {
     return sizeof(intset)+intrev32ifbe(is->length)*intrev32ifbe(is->encoding);
 }

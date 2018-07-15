@@ -118,42 +118,47 @@
 /* Different encoding/length possibilities */
 #define ZIP_STR_MASK 0xc0
 #define ZIP_INT_MASK 0x30
-#define ZIP_STR_06B (0 << 6)
-#define ZIP_STR_14B (1 << 6)
-#define ZIP_STR_32B (2 << 6)
-#define ZIP_INT_16B (0xc0 | 0<<4)
-#define ZIP_INT_32B (0xc0 | 1<<4)
-#define ZIP_INT_64B (0xc0 | 2<<4)
-#define ZIP_INT_24B (0xc0 | 3<<4)
-#define ZIP_INT_8B 0xfe
+#define ZIP_STR_06B (0 << 6)        //00bbbbbb    1字节长     2^6
+#define ZIP_STR_14B (1 << 6)        //01bbbbbb xxxxxxxx   2字节长 2^14
+#define ZIP_STR_32B (2 << 6)        //10______ aaaaaaaa bbbbbbbb cccccccc dddddddd    5字节长 2^32   
+#define ZIP_INT_16B (0xc0 | 0<<4)   //11000000 1字节
+#define ZIP_INT_32B (0xc0 | 1<<4)   //11010000 1字节
+#define ZIP_INT_64B (0xc0 | 2<<4)   //11100000 1字节
+#define ZIP_INT_24B (0xc0 | 3<<4)   //11110000 1字节    
+#define ZIP_INT_8B 0xfe             //11111110 1字节    
 /* 4 bit integer immediate encoding */
-#define ZIP_INT_IMM_MASK 0x0f
+//4bit整数变啊
+#define ZIP_INT_IMM_MASK 0x0f       //
 #define ZIP_INT_IMM_MIN 0xf1    /* 11110001 */
 #define ZIP_INT_IMM_MAX 0xfd    /* 11111101 */
 #define ZIP_INT_IMM_VAL(v) (v & ZIP_INT_IMM_MASK)
 
-#define INT24_MAX 0x7fffff
-#define INT24_MIN (-INT24_MAX - 1)
+#define INT24_MAX 0x7fffff      //24位最大值
+#define INT24_MIN (-INT24_MAX - 1)  //24位最小值
 
 /* Macro to determine type */
-#define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)
+#define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)     //判断是否是字符串
 
 /* Utility macros */
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
-#define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
-#define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))
-#define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))
-#define ZIPLIST_ENTRY_HEAD(zl)  ((zl)+ZIPLIST_HEADER_SIZE)
-#define ZIPLIST_ENTRY_TAIL(zl)  ((zl)+intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl)))
-#define ZIPLIST_ENTRY_END(zl)   ((zl)+intrev32ifbe(ZIPLIST_BYTES(zl))-1)
+#define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))         //获取在zltail属性的地址
+#define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))       //获取allen的地址
+#define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))           //属性头部占用的总字节数
+#define ZIPLIST_ENTRY_HEAD(zl)  ((zl)+ZIPLIST_HEADER_SIZE)                      //获取头节点的地址
+#define ZIPLIST_ENTRY_TAIL(zl)  ((zl)+intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl)))    //获取尾部节点的地址
+#define ZIPLIST_ENTRY_END(zl)   ((zl)+intrev32ifbe(ZIPLIST_BYTES(zl))-1)        //获取末端的节点
+
+//albytes | zltail | zllen | ..... | zlend
 
 /* We know a positive increment can only be 1 because entries can only be
  * pushed one at a time. */
+//zllen只有 UINTMAX_以下才是准确的长度值
 #define ZIPLIST_INCR_LENGTH(zl,incr) { \
-    if (ZIPLIST_LENGTH(zl) < UINT16_MAX) \
+    if (ZIPLIST_LENGTH(zl) < UINT16_MAX) \          
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
 }
 
+//节点的定义
 typedef struct zlentry {
     unsigned int prevrawlensize, prevrawlen;
     unsigned int lensize, len;
