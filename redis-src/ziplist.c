@@ -160,21 +160,23 @@
 
 //节点的定义
 typedef struct zlentry {
-    unsigned int prevrawlensize, prevrawlen;
-    unsigned int lensize, len;
-    unsigned int headersize;
-    unsigned char encoding;
+    unsigned int prevrawlensize, prevrawlen;            //用来计算前面节点的地址
+    unsigned int lensize, len;                          //本节点的长度
+    unsigned int headersize;                            
+    unsigned char encoding;                             //编码
     unsigned char *p;
 } zlentry;
 
 /* Extract the encoding from the byte pointed by 'ptr' and set it into
  * 'encoding'. */
+//获取节点编码类型
 #define ZIP_ENTRY_ENCODING(ptr, encoding) do {  \
     (encoding) = (ptr[0]); \
     if ((encoding) < ZIP_STR_MASK) (encoding) &= ZIP_STR_MASK; \
 } while(0)
 
 /* Return bytes needed to store integer encoded by 'encoding' */
+//整数编码类型的字节数
 static unsigned int zipIntSize(unsigned char encoding) {
     switch(encoding) {
     case ZIP_INT_8B:  return 1;
@@ -182,7 +184,7 @@ static unsigned int zipIntSize(unsigned char encoding) {
     case ZIP_INT_24B: return 3;
     case ZIP_INT_32B: return 4;
     case ZIP_INT_64B: return 8;
-    default: return 0; /* 4 bit immediate */
+    default: return 0; /* 4 bit immediate */     //4bit返回0   
     }
     assert(NULL);
     return 0;
@@ -190,23 +192,26 @@ static unsigned int zipIntSize(unsigned char encoding) {
 
 /* Encode the length 'rawlen' writing it in 'p'. If p is NULL it just returns
  * the amount of bytes required to encode such a length. */
+//计算并存储字节编码
 static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, unsigned int rawlen) {
     unsigned char len = 1, buf[5];
 
     if (ZIP_IS_STR(encoding)) {
         /* Although encoding is given it may not be set for strings,
          * so we determine it here using the raw length. */
-        if (rawlen <= 0x3f) {
+        //通过字符串长度来判断编码类型
+        if (rawlen <= 0x3f) {           //1字节长可表示
             if (!p) return len;
-            buf[0] = ZIP_STR_06B | rawlen;
+            buf[0] = ZIP_STR_06B | rawlen;      //保存长度
         } else if (rawlen <= 0x3fff) {
             len += 1;
             if (!p) return len;
-            buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);
-            buf[1] = rawlen & 0xff;
+            buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);      //取前6位，然后组成的第一个字节
+            buf[1] = rawlen & 0xff;         //组成第二个字节
         } else {
             len += 4;
             if (!p) return len;
+            //计算各个字节怎么存
             buf[0] = ZIP_STR_32B;
             buf[1] = (rawlen >> 24) & 0xff;
             buf[2] = (rawlen >> 16) & 0xff;
@@ -215,6 +220,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
         }
     } else {
         /* Implies integer encoding, so length is always 1. */
+        //整数的编码字节都为1
         if (!p) return len;
         buf[0] = encoding;
     }
@@ -228,6 +234,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
  * entries encoding, the 'lensize' variable will hold the number of bytes
  * required to encode the entries length, and the 'len' variable will hold the
  * entries length. */
+//解码字节编码，获取数据暂居字节数
 #define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
     ZIP_ENTRY_ENCODING((ptr), (encoding));                                     \
     if ((encoding) < ZIP_STR_MASK) {                                           \
@@ -254,6 +261,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
 
 /* Encode the length of the previous entry and write it to "p". Return the
  * number of bytes needed to encode this length if "p" is NULL. */
+//p如果是NULL，则只计算长度，否则，要写入p
 static unsigned int zipPrevEncodeLength(unsigned char *p, unsigned int len) {
     if (p == NULL) {
         return (len < ZIP_BIGLEN) ? 1 : sizeof(len)+1;
@@ -261,9 +269,9 @@ static unsigned int zipPrevEncodeLength(unsigned char *p, unsigned int len) {
         if (len < ZIP_BIGLEN) {
             p[0] = len;
             return 1;
-        } else {
+        } else {                //大于254的长度，头字节为 0xfe
             p[0] = ZIP_BIGLEN;
-            memcpy(p+1,&len,sizeof(len));
+            memcpy(p+1,&len,sizeof(len));           //写入后面4个字节
             memrev32ifbe(p+1);
             return 1+sizeof(len);
         }
@@ -281,6 +289,7 @@ static void zipPrevEncodeLengthForceLarge(unsigned char *p, unsigned int len) {
 
 /* Decode the number of bytes required to store the length of the previous
  * element, from the perspective of the entry pointed to by 'ptr'. */
+//获取存储前字节长度的pre长度
 #define ZIP_DECODE_PREVLENSIZE(ptr, prevlensize) do {                          \
     if ((ptr)[0] < ZIP_BIGLEN) {                                               \
         (prevlensize) = 1;                                                     \
@@ -291,6 +300,7 @@ static void zipPrevEncodeLengthForceLarge(unsigned char *p, unsigned int len) {
 
 /* Decode the length of the previous element, from the perspective of the entry
  * pointed to by 'ptr'. */
+//获取前节点字节长度
 #define ZIP_DECODE_PREVLEN(ptr, prevlensize, prevlen) do {                     \
     ZIP_DECODE_PREVLENSIZE(ptr, prevlensize);                                  \
     if ((prevlensize) == 1) {                                                  \
