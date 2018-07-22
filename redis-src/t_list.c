@@ -36,10 +36,11 @@
 /* Check the argument length to see if it requires us to convert the ziplist
  * to a real list. Only check raw-encoded objects because integer encoded
  * objects are never too long. */
+//根据值value看是否需要转成双端链表
 void listTypeTryConversion(robj *subject, robj *value) {
     if (subject->encoding != REDIS_ENCODING_ZIPLIST) return;
     if (sdsEncodedObject(value) &&
-        sdslen(value->ptr) > server.list_max_ziplist_value)
+        sdslen(value->ptr) > server.list_max_ziplist_value) //长度大于64字节
             listTypeConvert(subject,REDIS_ENCODING_LINKEDLIST);
 }
 
@@ -52,15 +53,17 @@ void listTypePush(robj *subject, robj *value, int where) {
     /* Check if we need to convert the ziplist */
     listTypeTryConversion(subject,value);
     if (subject->encoding == REDIS_ENCODING_ZIPLIST &&
-        ziplistLen(subject->ptr) >= server.list_max_ziplist_entries)
+        ziplistLen(subject->ptr) >= server.list_max_ziplist_entries) //元素数量大于512
             listTypeConvert(subject,REDIS_ENCODING_LINKEDLIST);
 
     if (subject->encoding == REDIS_ENCODING_ZIPLIST) {
+        //压缩列表由压缩列表的元素添加方式
         int pos = (where == REDIS_HEAD) ? ZIPLIST_HEAD : ZIPLIST_TAIL;
         value = getDecodedObject(value);
         subject->ptr = ziplistPush(subject->ptr,value->ptr,sdslen(value->ptr),pos);
         decrRefCount(value);
     } else if (subject->encoding == REDIS_ENCODING_LINKEDLIST) {
+        //双端列表使用双端列表的添加方式
         if (where == REDIS_HEAD) {
             listAddNodeHead(subject->ptr,value);
         } else {
@@ -71,7 +74,7 @@ void listTypePush(robj *subject, robj *value, int where) {
         redisPanic("Unknown list encoding");
     }
 }
-
+//弹出元素
 robj *listTypePop(robj *subject, int where) {
     robj *value = NULL;
     if (subject->encoding == REDIS_ENCODING_ZIPLIST) {
@@ -83,8 +86,10 @@ robj *listTypePop(robj *subject, int where) {
         p = ziplistIndex(subject->ptr,pos);
         if (ziplistGet(p,&vstr,&vlen,&vlong)) {
             if (vstr) {
+                //取出的是字符串
                 value = createStringObject((char*)vstr,vlen);
             } else {
+               //取出的是整数 
                 value = createStringObjectFromLongLong(vlong);
             }
             /* We only need to delete an element when it exists */
@@ -109,6 +114,7 @@ robj *listTypePop(robj *subject, int where) {
     return value;
 }
 
+//获取列表长度
 unsigned long listTypeLength(robj *subject) {
     if (subject->encoding == REDIS_ENCODING_ZIPLIST) {
         return ziplistLen(subject->ptr);
@@ -120,6 +126,7 @@ unsigned long listTypeLength(robj *subject) {
 }
 
 /* Initialize an iterator at the specified index. */
+//创立迭代器
 listTypeIterator *listTypeInitIterator(robj *subject, long index, unsigned char direction) {
     listTypeIterator *li = zmalloc(sizeof(listTypeIterator));
     li->subject = subject;
@@ -145,7 +152,7 @@ void listTypeReleaseIterator(listTypeIterator *li) {
  * entry is in fact an entry, 0 otherwise. */
 int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
     /* Protect from converting when iterating */
-    redisAssert(li->subject->encoding == li->encoding);
+    redisAssert(li->subject->encoding == li->encoding); //防止在遍历的过程中被转换
 
     entry->li = li;
     if (li->encoding == REDIS_ENCODING_ZIPLIST) {
@@ -171,7 +178,7 @@ int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
     }
     return 0;
 }
-
+//获取迭代器当前节点的值
 /* Return entry or NULL at the current position of the iterator. */
 robj *listTypeGet(listTypeEntry *entry) {
     listTypeIterator *li = entry->li;
@@ -182,6 +189,7 @@ robj *listTypeGet(listTypeEntry *entry) {
         long long vlong;
         redisAssert(entry->zi != NULL);
         if (ziplistGet(entry->zi,&vstr,&vlen,&vlong)) {
+            // 下面的都是创建新值
             if (vstr) {
                 value = createStringObject((char*)vstr,vlen);
             } else {
@@ -191,13 +199,13 @@ robj *listTypeGet(listTypeEntry *entry) {
     } else if (li->encoding == REDIS_ENCODING_LINKEDLIST) {
         redisAssert(entry->ln != NULL);
         value = listNodeValue(entry->ln);
-        incrRefCount(value);
+        incrRefCount(value);//增加引用
     } else {
         redisPanic("Unknown list encoding");
     }
     return value;
 }
-
+//插入节点
 void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
     robj *subject = entry->li->subject;
     if (entry->li->encoding == REDIS_ENCODING_ZIPLIST) {
@@ -229,6 +237,7 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
 }
 
 /* Compare the given object with the entry at the current position. */
+//比较节点是否相等
 int listTypeEqual(listTypeEntry *entry, robj *o) {
     listTypeIterator *li = entry->li;
     if (li->encoding == REDIS_ENCODING_ZIPLIST) {
@@ -242,6 +251,7 @@ int listTypeEqual(listTypeEntry *entry, robj *o) {
 }
 
 /* Delete the element pointed to. */
+//删除节点
 void listTypeDelete(listTypeEntry *entry) {
     listTypeIterator *li = entry->li;
     if (li->encoding == REDIS_ENCODING_ZIPLIST) {
@@ -265,7 +275,7 @@ void listTypeDelete(listTypeEntry *entry) {
         redisPanic("Unknown list encoding");
     }
 }
-
+//列表类型转换
 void listTypeConvert(robj *subject, int enc) {
     listTypeIterator *li;
     listTypeEntry entry;
@@ -291,7 +301,7 @@ void listTypeConvert(robj *subject, int enc) {
 /*-----------------------------------------------------------------------------
  * List Commands
  *----------------------------------------------------------------------------*/
-
+//lpush/rpush
 void pushGenericCommand(redisClient *c, int where) {
     int j, waiting = 0, pushed = 0;
     robj *lobj = lookupKeyWrite(c->db,c->argv[1]);
@@ -328,6 +338,7 @@ void rpushCommand(redisClient *c) {
     pushGenericCommand(c,REDIS_TAIL);
 }
 
+//linsert
 void pushxGenericCommand(redisClient *c, robj *refval, robj *val, int where) {
     robj *subject;
     listTypeIterator *iter;
@@ -361,6 +372,7 @@ void pushxGenericCommand(redisClient *c, robj *refval, robj *val, int where) {
             if (subject->encoding == REDIS_ENCODING_ZIPLIST &&
                 ziplistLen(subject->ptr) > server.list_max_ziplist_entries)
                     listTypeConvert(subject,REDIS_ENCODING_LINKEDLIST);
+                    //根据长度判断是否需要转双端列表
             signalModifiedKey(c->db,c->argv[1]);
             notifyKeyspaceEvent(REDIS_NOTIFY_LIST,"linsert",
                                 c->argv[1],c->db->id);
@@ -408,7 +420,7 @@ void llenCommand(redisClient *c) {
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
     addReplyLongLong(c,listTypeLength(o));
 }
-
+//lindex
 void lindexCommand(redisClient *c) {
     robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
@@ -447,7 +459,7 @@ void lindexCommand(redisClient *c) {
         redisPanic("Unknown list encoding");
     }
 }
-
+//lset
 void lsetCommand(redisClient *c) {
     robj *o = lookupKeyWriteOrReply(c,c->argv[1],shared.nokeyerr);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
@@ -505,6 +517,7 @@ void popGenericCommand(redisClient *c, int where) {
         decrRefCount(value);
         notifyKeyspaceEvent(REDIS_NOTIFY_LIST,event,c->argv[1],c->db->id);
         if (listTypeLength(o) == 0) {
+            //当列表长度为0时，删除对应字符键
             notifyKeyspaceEvent(REDIS_NOTIFY_GENERIC,"del",
                                 c->argv[1],c->db->id);
             dbDelete(c->db,c->argv[1]);
@@ -521,7 +534,7 @@ void lpopCommand(redisClient *c) {
 void rpopCommand(redisClient *c) {
     popGenericCommand(c,REDIS_TAIL);
 }
-
+//lrange
 void lrangeCommand(redisClient *c) {
     robj *o;
     long start, end, llen, rangelen;
@@ -580,7 +593,7 @@ void lrangeCommand(redisClient *c) {
         redisPanic("List encoding is not LINKEDLIST nor ZIPLIST!");
     }
 }
-
+//ltrim
 void ltrimCommand(redisClient *c) {
     robj *o;
     long start, end, llen, j, ltrim, rtrim;
@@ -711,7 +724,7 @@ void rpoplpushHandlePush(redisClient *c, robj *dstkey, robj *dstobj, robj *value
     /* Always send the pushed value to the client. */
     addReplyBulk(c,value);
 }
-
+//rpushlpush命令
 void rpoplpushCommand(redisClient *c) {
     robj *sobj, *value;
     if ((sobj = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
@@ -793,6 +806,7 @@ void blockForKeys(redisClient *c, robj **keys, int numkeys, mstime_t timeout, ro
             int retval;
 
             /* For every key we take a list of clients blocked for it */
+            //创建一个正在等待的客户端列表
             l = listCreate();
             retval = dictAdd(c->db->blocking_keys,keys[j],l);
             incrRefCount(keys[j]);

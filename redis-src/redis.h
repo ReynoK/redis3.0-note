@@ -973,8 +973,8 @@ typedef struct {
     robj *subject;
     unsigned char encoding;
     unsigned char direction; /* Iteration direction */
-    unsigned char *zi;
-    listNode *ln;
+    unsigned char *zi; //压缩列表，如果encoding是压缩列表，则用这个
+    listNode *ln;   //双端列表，如果encoding是双端列表，则用这个
 } listTypeIterator;
 
 /* Structure for an entry while iterating over a list. */
