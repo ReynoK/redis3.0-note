@@ -57,6 +57,7 @@
 /* Objects encoding. Some kind of objects like Strings and Hashes can be
  * internally represented in multiple ways. The 'encoding' field of the object
  * is set to one of this fields for this object. */
+//redisobj encoding定义，默认简单动态字符串
 #define REDIS_ENCODING_RAW 0    /* Raw representation */
 #define REDIS_ENCODING_INT 1    /* Encoded as integer */
 #define REDIS_ENCODING_ZIPMAP 2 /* Encoded as zipmap */
