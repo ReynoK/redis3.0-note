@@ -44,7 +44,7 @@ void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
 
     for (i = start; i <= end; i++) {
         if (sdsEncodedObject(argv[i]) &&
-            sdslen(argv[i]->ptr) > server.hash_max_ziplist_value)
+            sdslen(argv[i]->ptr) > server.hash_max_ziplist_value)       //ziplist 中的 key 和 value必须小于64字节
         {
             hashTypeConvert(o, REDIS_ENCODING_HT);
             break;
@@ -53,6 +53,7 @@ void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
 }
 
 /* Encode given objects in-place when the hash uses a dict. */
+//当编码是hashtable的时候，看看能不能简化键和值的大小
 void hashTypeTryObjectEncoding(robj *subject, robj **o1, robj **o2) {
     if (subject->encoding == REDIS_ENCODING_HT) {
         if (o1) *o1 = tryObjectEncoding(*o1);
@@ -62,6 +63,7 @@ void hashTypeTryObjectEncoding(robj *subject, robj **o1, robj **o2) {
 
 /* Get the value from a ziplist encoded hash, identified by field.
  * Returns -1 when the field cannot be found. */
+//从ziplist获取值
 int hashTypeGetFromZiplist(robj *o, robj *field,
                            unsigned char **vstr,
                            unsigned int *vlen,
@@ -80,6 +82,7 @@ int hashTypeGetFromZiplist(robj *o, robj *field,
         fptr = ziplistFind(fptr, field->ptr, sdslen(field->ptr), 1);
         if (fptr != NULL) {
             /* Grab pointer to the value (fptr points to the field) */
+            //键的后面是值
             vptr = ziplistNext(zl, fptr);
             redisAssert(vptr != NULL);
         }
@@ -98,6 +101,7 @@ int hashTypeGetFromZiplist(robj *o, robj *field,
 
 /* Get the value from a hash table encoded hash, identified by field.
  * Returns -1 when the field cannot be found. */
+//从hashtable中获取键值对
 int hashTypeGetFromHashTable(robj *o, robj *field, robj **value) {
     dictEntry *de;
 
@@ -115,6 +119,7 @@ int hashTypeGetFromHashTable(robj *o, robj *field, robj **value) {
  *
  * The lower level function can prevent copy on write so it is
  * the preferred way of doing read operations. */
+//获取键值的高级函数
 robj *hashTypeGetObject(robj *o, robj *field) {
     robj *value = NULL;
 
@@ -146,6 +151,7 @@ robj *hashTypeGetObject(robj *o, robj *field) {
 
 /* Test if the specified field exists in the given hash. Returns 1 if the field
  * exists, and 0 when it doesn't. */
+//看键是否存在
 int hashTypeExists(robj *o, robj *field) {
     if (o->encoding == REDIS_ENCODING_ZIPLIST) {
         unsigned char *vstr = NULL;
@@ -167,6 +173,7 @@ int hashTypeExists(robj *o, robj *field) {
  * Return 0 on insert and 1 on update.
  * This function will take care of incrementing the reference count of the
  * retained fields and value objects. */
+//添加值
 int hashTypeSet(robj *o, robj *field, robj *value) {
     int update = 0;
 
@@ -187,6 +194,7 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
                 update = 1;
 
                 /* Delete value */
+                //先删除，在插入
                 zl = ziplistDelete(zl, &vptr);
 
                 /* Insert new value */
@@ -195,6 +203,7 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
         }
 
         if (!update) {
+            //不能存在，则添加
             /* Push new field/value pair onto the tail of the ziplist */
             zl = ziplistPush(zl, field->ptr, sdslen(field->ptr), ZIPLIST_TAIL);
             zl = ziplistPush(zl, value->ptr, sdslen(value->ptr), ZIPLIST_TAIL);
@@ -221,6 +230,7 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
 
 /* Delete an element from a hash.
  * Return 1 on deleted and 0 on not found. */
+//删除键值
 int hashTypeDelete(robj *o, robj *field) {
     int deleted = 0;
 
@@ -234,6 +244,7 @@ int hashTypeDelete(robj *o, robj *field) {
         if (fptr != NULL) {
             fptr = ziplistFind(fptr, field->ptr, sdslen(field->ptr), 1);
             if (fptr != NULL) {
+                //连续删除2个
                 zl = ziplistDelete(zl,&fptr);
                 zl = ziplistDelete(zl,&fptr);
                 o->ptr = zl;
@@ -259,6 +270,7 @@ int hashTypeDelete(robj *o, robj *field) {
 }
 
 /* Return the number of elements in a hash. */
+//获取hash键长度
 unsigned long hashTypeLength(robj *o) {
     unsigned long length = ULONG_MAX;
 
@@ -272,7 +284,7 @@ unsigned long hashTypeLength(robj *o) {
 
     return length;
 }
-
+//创建遍历迭代器
 hashTypeIterator *hashTypeInitIterator(robj *subject) {
     hashTypeIterator *hi = zmalloc(sizeof(hashTypeIterator));
     hi->subject = subject;
@@ -289,7 +301,7 @@ hashTypeIterator *hashTypeInitIterator(robj *subject) {
 
     return hi;
 }
-
+//释放迭代器
 void hashTypeReleaseIterator(hashTypeIterator *hi) {
     if (hi->encoding == REDIS_ENCODING_HT) {
         dictReleaseIterator(hi->di);
@@ -337,6 +349,7 @@ int hashTypeNext(hashTypeIterator *hi) {
 
 /* Get the field or value at iterator cursor, for an iterator on a hash value
  * encoded as a ziplist. Prototype is similar to `hashTypeGetFromZiplist`. */
+//获取键或值
 void hashTypeCurrentFromZiplist(hashTypeIterator *hi, int what,
                                 unsigned char **vstr,
                                 unsigned int *vlen,
@@ -357,6 +370,7 @@ void hashTypeCurrentFromZiplist(hashTypeIterator *hi, int what,
 
 /* Get the field or value at iterator cursor, for an iterator on a hash value
  * encoded as a ziplist. Prototype is similar to `hashTypeGetFromHashTable`. */
+//从dict中获取键或值
 void hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what, robj **dst) {
     redisAssert(hi->encoding == REDIS_ENCODING_HT);
 
@@ -370,6 +384,7 @@ void hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what, robj **dst) {
 /* A non copy-on-write friendly but higher level version of hashTypeCurrent*()
  * that returns an object with incremented refcount (or a new object). It is up
  * to the caller to decrRefCount() the object if no reference is retained. */
+//更加高级的获取键值函数
 robj *hashTypeCurrentObject(hashTypeIterator *hi, int what) {
     robj *dst;
 
@@ -406,7 +421,7 @@ robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key) {
     }
     return o;
 }
-
+//dict转ziplist
 void hashTypeConvertZiplist(robj *o, int enc) {
     redisAssert(o->encoding == REDIS_ENCODING_ZIPLIST);
 
@@ -460,13 +475,13 @@ void hashTypeConvert(robj *o, int enc) {
 /*-----------------------------------------------------------------------------
  * Hash type commands
  *----------------------------------------------------------------------------*/
-
+//hset命令
 void hsetCommand(redisClient *c) {
     int update;
     robj *o;
 
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
-    hashTypeTryConversion(o,c->argv,2,3);
+    hashTypeTryConversion(o,c->argv,2,3); //看是否需要强转
     hashTypeTryObjectEncoding(o,&c->argv[2], &c->argv[3]);
     update = hashTypeSet(o,c->argv[2],c->argv[3]);
     addReply(c, update ? shared.czero : shared.cone);
@@ -474,7 +489,7 @@ void hsetCommand(redisClient *c) {
     notifyKeyspaceEvent(REDIS_NOTIFY_HASH,"hset",c->argv[1],c->db->id);
     server.dirty++;
 }
-
+//hsetnx命令
 void hsetnxCommand(redisClient *c) {
     robj *o;
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
