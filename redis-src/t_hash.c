@@ -507,10 +507,11 @@ void hsetnxCommand(redisClient *c) {
     }
 }
 
+//hmset命令
 void hmsetCommand(redisClient *c) {
     int i;
     robj *o;
-
+    //必然是偶数个，否则一定有问题
     if ((c->argc % 2) == 1) {
         addReplyError(c,"wrong number of arguments for HMSET");
         return;
@@ -527,7 +528,7 @@ void hmsetCommand(redisClient *c) {
     notifyKeyspaceEvent(REDIS_NOTIFY_HASH,"hset",c->argv[1],c->db->id);
     server.dirty++;
 }
-
+//hincby命令
 void hincrbyCommand(redisClient *c) {
     long long value, incr, oldvalue;
     robj *o, *current, *new;
@@ -545,7 +546,7 @@ void hincrbyCommand(redisClient *c) {
         value = 0;
     }
 
-    oldvalue = value;
+    是一月又一月拖拖拖拖拖拖拖热不被被被被被被被被被被VB       v。？}   oldvalue = value;
     if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
         (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue))) {
         addReplyError(c,"increment or decrement would overflow");
@@ -561,7 +562,7 @@ void hincrbyCommand(redisClient *c) {
     notifyKeyspaceEvent(REDIS_NOTIFY_HASH,"hincrby",c->argv[1],c->db->id);
     server.dirty++;
 }
-
+//HINCRBYFLOAT
 void hincrbyfloatCommand(redisClient *c) {
     double long value, incr;
     robj *o, *current, *new, *aux;
@@ -636,7 +637,7 @@ static void addHashFieldToReply(redisClient *c, robj *o, robj *field) {
         redisPanic("Unknown hash encoding");
     }
 }
-
+//hget
 void hgetCommand(redisClient *c) {
     robj *o;
 
@@ -645,7 +646,7 @@ void hgetCommand(redisClient *c) {
 
     addHashFieldToReply(c, o, c->argv[2]);
 }
-
+//hmg
 void hmgetCommand(redisClient *c) {
     robj *o;
     int i;
@@ -663,7 +664,7 @@ void hmgetCommand(redisClient *c) {
         addHashFieldToReply(c, o, c->argv[i]);
     }
 }
-
+//hdel
 void hdelCommand(redisClient *c) {
     robj *o;
     int j, deleted = 0, keyremoved = 0;
@@ -691,7 +692,7 @@ void hdelCommand(redisClient *c) {
     }
     addReplyLongLong(c,deleted);
 }
-
+//hlen操作
 void hlenCommand(redisClient *c) {
     robj *o;
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
@@ -723,7 +724,7 @@ static void addHashIteratorCursorToReply(redisClient *c, hashTypeIterator *hi, i
         redisPanic("Unknown hash encoding");
     }
 }
-
+//hgetall
 void genericHgetallCommand(redisClient *c, int flags) {
     robj *o;
     hashTypeIterator *hi;
@@ -732,7 +733,7 @@ void genericHgetallCommand(redisClient *c, int flags) {
 
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk)) == NULL
         || checkType(c,o,REDIS_HASH)) return;
-
+    //计算需要多少bulk来存储返回值
     if (flags & REDIS_HASH_KEY) multiplier++;
     if (flags & REDIS_HASH_VALUE) multiplier++;
 
@@ -766,7 +767,7 @@ void hvalsCommand(redisClient *c) {
 void hgetallCommand(redisClient *c) {
     genericHgetallCommand(c,REDIS_HASH_KEY|REDIS_HASH_VALUE);
 }
-
+//hexists
 void hexistsCommand(redisClient *c) {
     robj *o;
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
