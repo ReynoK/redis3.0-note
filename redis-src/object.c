@@ -193,14 +193,14 @@ robj *createListObject(void) {
     o->encoding = REDIS_ENCODING_LINKEDLIST;
     return o;
 }
-
+//创建intset的set
 robj *createZiplistObject(void) {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(REDIS_LIST,zl);
     o->encoding = REDIS_ENCODING_ZIPLIST;
     return o;
 }
-
+//创建dict的set
 robj *createSetObject(void) {
     dict *d = dictCreate(&setDictType,NULL);
     robj *o = createObject(REDIS_SET,d);
