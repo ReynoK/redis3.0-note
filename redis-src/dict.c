@@ -213,11 +213,11 @@ int dictResize(dict *d)
 int dictExpand(dict *d, unsigned long size)
 {
     dictht n; /* the new hash table */
-    unsigned long realsize = _dictNextPower(size);      //获得resize 的新大小
+    unsigned long realsize = _dictNextPower(size);      //获得resize后实际的新大小，通常是2^n的大小
 
     /* the size is invalid if it is smaller than the number of
      * elements already inside the hash table */
-    if (dictIsRehashing(d) || d->ht[0].used > size) //当旧表的used > size 时，即负载因子大于1，才会往下走
+    if (dictIsRehashing(d) || d->ht[0].used > size) //通常要求新的长度要比1已拥有的键值数量大并且该dict不能正在rehahs中
         return DICT_ERR;
 
     /* Rehashing to the same table size is not useful. */
@@ -978,7 +978,7 @@ static int _dictExpandIfNeeded(dict *d)
 /* Our hash table capability is a power of two */
 static unsigned long _dictNextPower(unsigned long size)
 {
-    unsigned long i = DICT_HT_INITIAL_SIZE;
+    unsigned long i = DICT_HT_INITIAL_SIZE; //4，也是table数组长度最小的值
 
     if (size >= LONG_MAX) return LONG_MAX;
     //以2的n次方倍扩张
