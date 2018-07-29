@@ -3571,7 +3571,7 @@ void redisOutOfMemoryHandler(size_t allocation_size) {
         allocation_size);
     redisPanic("Redis aborting for OUT OF MEMORY");
 }
-
+//修改进程名称
 void redisSetProcTitle(char *title) {
 #ifdef USE_SETPROCTITLE
     char *server_mode = "";
