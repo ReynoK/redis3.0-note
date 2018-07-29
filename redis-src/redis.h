@@ -465,14 +465,57 @@ struct evictionPoolEntry {
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
+//寻找指定值，如果找到了返回1并设置pos为其位置，否则返回0，设置pos可以插入的位置
+static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) {
+    int min = 0, max = intrev32ifbe(is->length)-1, mid = -1;
+    int64_t cur = -1;
+
+    /* The value can never be found when the set is empty */
+    if (intrev32ifbe(is->length) == 0) {
+        if (pos) *pos = 0;
+        return 0;
+    } else {
+        /* Check for the case where we know we cannot find the value,
+         * but do know the insert position. */
+        //是否比最大的值大，或者比最小的值小
+        if (value > _intsetGet(is,intrev32ifbe(is->length)-1)) {
+            if (pos) *pos = intrev32ifbe(is->length);
+            return 0;
+        } else if (value < _intsetGet(is,0)) {
+            if (pos) *pos = 0;
+            return 0;
+        }
+    }
+
+    while(max >= min) {
+        mid = ((unsigned int)min + (unsigned int)max) >> 1;     //二分查找法
+        cur = _intsetGet(is,mid);
+        if (value > cur) {
+            min = mid+1;
+        } else if (value < cur) {
+            max = mid-1;
+        } else {
+            break;
+        }
+    }
+
+    if (value == cur) {     //如果过找到该值
+        if (pos) *pos = mid;
+        return 1;
+    } else {
+        if (pos) *pos = min;
+        return 0;
+    }
+}
+//redisDb对象
 typedef struct redisDb {
-    dict *dict;                 /* The keyspace for this DB */
-    dict *expires;              /* Timeout of keys with a timeout set */
+    dict *dict;                 /* The keyspace for this DB 键空间，key是redis中的字符串键，value是具体的各种类型值 */ 
+    dict *expires;              /* Timeout of keys with a timeout set 过期键空间，保存每个设置了过期时间的键及其过期时间 */
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP) */
     dict *ready_keys;           /* Blocked keys that received a PUSH */
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
     struct evictionPoolEntry *eviction_pool;    /* Eviction pool of keys */
-    int id;                     /* Database ID */
+    int id;                     /* Database ID 数据库id，默认总共会创建16个数据库*/
     long long avg_ttl;          /* Average TTL, just for stats */
 } redisDb;
 
@@ -529,7 +572,7 @@ typedef struct readyList {
 typedef struct redisClient {
     uint64_t id;            /* Client incremental unique ID. */
     int fd;
-    redisDb *db;
+    redisDb *db;            //当前指向的redisDb指针
     int dictid;
     robj *name;             /* As set by CLIENT SETNAME */
     sds querybuf;
@@ -671,7 +714,7 @@ struct redisServer {
     pid_t pid;                  /* Main process pid. */
     char *configfile;           /* Absolute config file path, or NULL */
     int hz;                     /* serverCron() calls frequency in hertz */
-    redisDb *db;
+    redisDb *db;                //redisDb数组
     dict *commands;             /* Command table */
     dict *orig_commands;        /* Command table before command renaming. */
     aeEventLoop *el;
@@ -718,10 +761,10 @@ struct redisServer {
     time_t stat_starttime;          /* Server start time */
     long long stat_numcommands;     /* Number of processed commands */
     long long stat_numconnections;  /* Number of connections received */
-    long long stat_expiredkeys;     /* Number of expired keys */
+    long long stat_expiredkeys;     /* Number of expired keys 过期键的数量 */
     long long stat_evictedkeys;     /* Number of evicted keys (maxmemory) */
-    long long stat_keyspace_hits;   /* Number of successful lookups of keys */
-    long long stat_keyspace_misses; /* Number of failed lookups of keys */
+    long long stat_keyspace_hits;   /* Number of successful lookups of keys 命中次数 */
+    long long stat_keyspace_misses; /* Number of failed lookups of keys 不命中次数*/
     size_t stat_peak_memory;        /* Max used memory record */
     long long stat_fork_time;       /* Time needed to perform latest fork() */
     double stat_fork_rate;          /* Fork rate in GB/sec. */
@@ -789,7 +832,7 @@ struct redisServer {
                                       to child process. */
     sds aof_child_diff;             /* AOF diff accumulator child side. */
     /* RDB persistence */
-    long long dirty;                /* Changes to DB from the last save */
+    long long dirty;                /* Changes to DB from the last save 自上次save以来多少次更改db */
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
     pid_t rdb_child_pid;            /* PID of RDB saving child */
     struct saveparam *saveparams;   /* Save points array for RDB */
@@ -797,7 +840,7 @@ struct redisServer {
     char *rdb_filename;             /* Name of RDB file */
     int rdb_compression;            /* Use compression in RDB? */
     int rdb_checksum;               /* Use RDB checksum? */
-    time_t lastsave;                /* Unix time of last successful save */
+    time_t lastsave;                /* Unix time of last successful save 上次save命令成功时间*/
     time_t lastbgsave_try;          /* Unix time of last attempted bgsave */
     time_t rdb_save_time_last;      /* Time used by last RDB save run. */
     time_t rdb_save_time_start;     /* Current RDB save start time. */

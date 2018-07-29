@@ -62,6 +62,7 @@
 /* When a length of a string object stored on disk has the first two bits
  * set, the remaining two bits specify a special encoding for the object
  * accordingly to the following defines: */
+//返回存储整数的类型
 #define REDIS_RDB_ENC_INT8 0        /* 8 bit signed integer */
 #define REDIS_RDB_ENC_INT16 1       /* 16 bit signed integer */
 #define REDIS_RDB_ENC_INT32 2       /* 32 bit signed integer */

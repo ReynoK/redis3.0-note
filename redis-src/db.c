@@ -40,7 +40,7 @@ void slotToKeyFlush(void);
 /*-----------------------------------------------------------------------------
  * C-level DB API
  *----------------------------------------------------------------------------*/
-
+//寻找键
 robj *lookupKey(redisDb *db, robj *key) {
     dictEntry *de = dictFind(db->dict,key->ptr);
     if (de) {
@@ -49,6 +49,8 @@ robj *lookupKey(redisDb *db, robj *key) {
         /* Update the access time for the ageing algorithm.
          * Don't do it if we have a saving child, as this will trigger
          * a copy on write madness. */
+        //更新lru时间
+        //如果正在进行持久化操作，则不更新
         if (server.rdb_child_pid == -1 && server.aof_child_pid == -1)
             val->lru = LRU_CLOCK();
         return val;
@@ -57,18 +59,19 @@ robj *lookupKey(redisDb *db, robj *key) {
     }
 }
 
+//读取键对应的值
 robj *lookupKeyRead(redisDb *db, robj *key) {
     robj *val;
 
     expireIfNeeded(db,key);
     val = lookupKey(db,key);
     if (val == NULL)
-        server.stat_keyspace_misses++;
+        server.stat_keyspace_misses++; //不命中次数
     else
-        server.stat_keyspace_hits++;
+        server.stat_keyspace_hits++; //增加命中
     return val;
 }
-
+//以写为目的查找键
 robj *lookupKeyWrite(redisDb *db, robj *key) {
     expireIfNeeded(db,key);
     return lookupKey(db,key);
@@ -90,6 +93,7 @@ robj *lookupKeyWriteOrReply(redisClient *c, robj *key, robj *reply) {
  * counter of the value if needed.
  *
  * The program is aborted if the key already exists. */
+//增加键值
 void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup(key->ptr);
     int retval = dictAdd(db->dict, copy, val);
@@ -104,6 +108,7 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
  * This function does not modify the expire time of the existing key.
  *
  * The program is aborted if the key was not already present. */
+//重新设定已存在键的值,由调用决定是否增加引用值
 void dbOverwrite(redisDb *db, robj *key, robj *val) {
     dictEntry *de = dictFind(db->dict,key->ptr);
 
@@ -124,10 +129,10 @@ void setKey(redisDb *db, robj *key, robj *val) {
         dbOverwrite(db,key,val);
     }
     incrRefCount(val);
-    removeExpire(db,key);
+    removeExpire(db,key);//删除过期键
     signalModifiedKey(db,key);
 }
-
+//查看键是否存在
 int dbExists(redisDb *db, robj *key) {
     return dictFind(db->dict,key->ptr) != NULL;
 }
@@ -136,6 +141,7 @@ int dbExists(redisDb *db, robj *key) {
  * If there are no keys, NULL is returned.
  *
  * The function makes sure to return keys not already expired. */
+//随机获取一个键，但要防止该键已过期
 robj *dbRandomKey(redisDb *db) {
     dictEntry *de;
 
@@ -150,7 +156,7 @@ robj *dbRandomKey(redisDb *db) {
         keyobj = createStringObject(key,sdslen(key));
         if (dictFind(db->expires,key)) {
             if (expireIfNeeded(db,keyobj)) {
-                decrRefCount(keyobj);
+                decrRefCount(keyobj); //置引用为0
                 continue; /* search for another key. This expired. */
             }
         }
@@ -159,10 +165,11 @@ robj *dbRandomKey(redisDb *db) {
 }
 
 /* Delete a key, value, and associated expiration entry if any, from the DB */
+//删除db键
 int dbDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
-    if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
+    if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);  //并不会删除键，因为与键空间共享键
     if (dictDelete(db->dict,key->ptr) == DICT_OK) {
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
@@ -198,6 +205,7 @@ int dbDelete(redisDb *db, robj *key) {
  * At this point the caller is ready to modify the object, for example
  * using an sdscat() call to append some data, or anything else.
  */
+//创建一个非共享的值,RAWSTRING这种本身不允许更改的无所谓
 robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o) {
     redisAssert(o->type == REDIS_STRING);
     if (o->refcount != 1 || o->encoding != REDIS_ENCODING_RAW) {
@@ -208,7 +216,7 @@ robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o) {
     }
     return o;
 }
-
+//清空db
 long long emptyDb(void(callback)(void*)) {
     int j;
     long long removed = 0;
@@ -221,7 +229,7 @@ long long emptyDb(void(callback)(void*)) {
     if (server.cluster_enabled) slotToKeyFlush();
     return removed;
 }
-
+//选择db
 int selectDb(redisClient *c, int id) {
     if (id < 0 || id >= server.dbnum)
         return REDIS_ERR;
@@ -229,15 +237,7 @@ int selectDb(redisClient *c, int id) {
     return REDIS_OK;
 }
 
-/*-----------------------------------------------------------------------------
- * Hooks for key space changes.
- *
- * Every time a key in the database is modified the function
- * signalModifiedKey() is called.
- *
- * Every time a DB is flushed the function signalFlushDb() is called.
- *----------------------------------------------------------------------------*/
-
+/*----------------------------------------------------------------------------- * Hooks for key space changes. * * Every time a key in the database is modified the function * signalModifiedKey() is called. * * Every time a DB is flushed the function signalFlushDb() is called. *----------------------------------------------------------------------------*/ 
 void signalModifiedKey(redisDb *db, robj *key) {
     touchWatchedKey(db,key);
 }
@@ -249,7 +249,7 @@ void signalFlushedDb(int dbid) {
 /*-----------------------------------------------------------------------------
  * Type agnostic commands operating on the key space
  *----------------------------------------------------------------------------*/
-
+//flushdb指令,单个db
 void flushdbCommand(redisClient *c) {
     server.dirty += dictSize(c->db->dict);
     signalFlushedDb(c->db->id);
@@ -258,7 +258,7 @@ void flushdbCommand(redisClient *c) {
     if (server.cluster_enabled) slotToKeyFlush();
     addReply(c,shared.ok);
 }
-
+//flushall指令,所有db
 void flushallCommand(redisClient *c) {
     signalFlushedDb(-1);
     server.dirty += emptyDb(NULL);
@@ -276,7 +276,7 @@ void flushallCommand(redisClient *c) {
     }
     server.dirty++;
 }
-
+//del命令
 void delCommand(redisClient *c) {
     int deleted = 0, j;
 
@@ -292,7 +292,7 @@ void delCommand(redisClient *c) {
     }
     addReplyLongLong(c,deleted);
 }
-
+//EXISTS命令
 /* EXISTS key1 key2 ... key_N.
  * Return value is the number of keys existing. */
 void existsCommand(redisClient *c) {
@@ -305,14 +305,14 @@ void existsCommand(redisClient *c) {
     }
     addReplyLongLong(c,count);
 }
-
+//select命令
 void selectCommand(redisClient *c) {
     long id;
 
     if (getLongFromObjectOrReply(c, c->argv[1], &id,
         "invalid DB index") != REDIS_OK)
         return;
-
+    //cluster模式不允许select命令
     if (server.cluster_enabled && id != 0) {
         addReplyError(c,"SELECT is not allowed in cluster mode");
         return;
@@ -323,7 +323,7 @@ void selectCommand(redisClient *c) {
         addReply(c,shared.ok);
     }
 }
-
+//randomkey命令
 void randomkeyCommand(redisClient *c) {
     robj *key;
 
@@ -335,7 +335,7 @@ void randomkeyCommand(redisClient *c) {
     addReplyBulk(c,key);
     decrRefCount(key);
 }
-
+//keys命令
 void keysCommand(redisClient *c) {
     dictIterator *di;
     dictEntry *de;
@@ -349,7 +349,7 @@ void keysCommand(redisClient *c) {
     while((de = dictNext(di)) != NULL) {
         sds key = dictGetKey(de);
         robj *keyobj;
-
+        //查找字符串
         if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
             keyobj = createStringObject(key,sdslen(key));
             if (expireIfNeeded(c->db,keyobj) == 0) {
@@ -607,15 +607,15 @@ void scanCommand(redisClient *c) {
     if (parseScanCursorOrReply(c,c->argv[1],&cursor) == REDIS_ERR) return;
     scanGenericCommand(c,NULL,cursor);
 }
-
+//返回db数量 
 void dbsizeCommand(redisClient *c) {
     addReplyLongLong(c,dictSize(c->db->dict));
 }
-
+//上次save成功实践
 void lastsaveCommand(redisClient *c) {
     addReplyLongLong(c,server.lastsave);
 }
-
+//返回键type类型
 void typeCommand(redisClient *c) {
     robj *o;
     char *type;
@@ -635,7 +635,7 @@ void typeCommand(redisClient *c) {
     }
     addReplyStatus(c,type);
 }
-
+//shutdown命令
 void shutdownCommand(redisClient *c) {
     int flags = 0;
 
@@ -663,7 +663,7 @@ void shutdownCommand(redisClient *c) {
     if (prepareForShutdown(flags) == REDIS_OK) exit(0);
     addReplyError(c,"Errors trying to SHUTDOWN. Check logs.");
 }
-
+//rename命令
 void renameGenericCommand(redisClient *c, int nx) {
     robj *o;
     long long expire;
@@ -709,7 +709,7 @@ void renameCommand(redisClient *c) {
 void renamenxCommand(redisClient *c) {
     renameGenericCommand(c,1);
 }
-
+//move db
 void moveCommand(redisClient *c) {
     robj *o;
     redisDb *src, *dst;
@@ -768,14 +768,14 @@ void moveCommand(redisClient *c) {
 /*-----------------------------------------------------------------------------
  * Expires API
  *----------------------------------------------------------------------------*/
-
+//删除过期时间
 int removeExpire(redisDb *db, robj *key) {
     /* An expire may only be removed if there is a corresponding entry in the
      * main dict. Otherwise, the key will never be freed. */
     redisAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
     return dictDelete(db->expires,key->ptr) == DICT_OK;
 }
-
+//设置过期时间
 void setExpire(redisDb *db, robj *key, long long when) {
     dictEntry *kde, *de;
 
@@ -788,6 +788,7 @@ void setExpire(redisDb *db, robj *key, long long when) {
 
 /* Return the expire time of the specified key, or -1 if no expire
  * is associated with this key (i.e. the key is non volatile) */
+//获取键失效时间，返回-1表示未设置或者键不存在
 long long getExpire(redisDb *db, robj *key) {
     dictEntry *de;
 
@@ -798,7 +799,7 @@ long long getExpire(redisDb *db, robj *key) {
     /* The entry was found in the expire dict, this means it should also
      * be present in the main dict (safety check). */
     redisAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
-    return dictGetSignedIntegerVal(de);
+    return dictGetSignedIntegerVal(de); //返回过期时间，因为expire也是键值空间，值是longlong类型
 }
 
 /* Propagate expires into slaves and the AOF file.
@@ -809,6 +810,7 @@ long long getExpire(redisDb *db, robj *key) {
  * AOF and the master->slave link guarantee operation ordering, everything
  * will be consistent even if we allow write operations against expiring
  * keys. */
+//传播过期键
 void propagateExpire(redisDb *db, robj *key) {
     robj *argv[2];
 
@@ -818,13 +820,14 @@ void propagateExpire(redisDb *db, robj *key) {
     incrRefCount(argv[1]);
 
     if (server.aof_state != REDIS_AOF_OFF)
-        feedAppendOnlyFile(server.delCommand,db->id,argv,2);
-    replicationFeedSlaves(server.slaves,db->id,argv,2);
+        feedAppendOnlyFile(server.delCommand,db->id,argv,2); //传播到AOF文件
+    replicationFeedSlaves(server.slaves,db->id,argv,2);//传播到slave
 
     decrRefCount(argv[0]);
     decrRefCount(argv[1]);
 }
 
+//惰性清理失效键
 int expireIfNeeded(redisDb *db, robj *key) {
     mstime_t when = getExpire(db,key);
     mstime_t now;
@@ -848,6 +851,8 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * Still we try to return the right information to the caller,
      * that is, 0 if we think the key should be still valid, 1 if
      * we think the key is expired at this time. */
+    //从库，不清理过期键，只由主库的DEL命令控制
+    //1表示通知上层，目前已经过期
     if (server.masterhost != NULL) return now > when;
 
     /* Return when this key has not expired */
@@ -872,13 +877,14 @@ int expireIfNeeded(redisDb *db, robj *key) {
  *
  * unit is either UNIT_SECONDS or UNIT_MILLISECONDS, and is only used for
  * the argv[2] parameter. The basetime is always specified in milliseconds. */
+//设置过期时间
 void expireGenericCommand(redisClient *c, long long basetime, int unit) {
     robj *key = c->argv[1], *param = c->argv[2];
     long long when; /* unix time in milliseconds when the key will expire. */
 
     if (getLongLongFromObjectOrReply(c, param, &when, NULL) != REDIS_OK)
         return;
-
+    //转换成毫秒
     if (unit == UNIT_SECONDS) when *= 1000;
     when += basetime;
 
@@ -933,7 +939,7 @@ void pexpireCommand(redisClient *c) {
 void pexpireatCommand(redisClient *c) {
     expireGenericCommand(c,0,UNIT_MILLISECONDS);
 }
-
+//ttl命令
 void ttlGenericCommand(redisClient *c, int output_ms) {
     long long expire, ttl = -1;
 

@@ -140,7 +140,7 @@
 #define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)     //判断是否是字符串
 
 /* Utility macros */
-#define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
+#define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))                            //去zlbytes属性
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))         //获取在zltail属性的地址
 #define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))       //获取allen的地址
 #define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))           //属性头部占用的总字节数

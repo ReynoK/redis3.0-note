@@ -58,6 +58,7 @@ struct _rio {
     size_t processed_bytes;
 
     /* maximum single read or write chunk size */
+    //最大读写块
     size_t max_processing_chunk;
 
     /* Backend-specific vars. */
@@ -93,12 +94,12 @@ typedef struct _rio rio;
 static inline size_t rioWrite(rio *r, const void *buf, size_t len) {
     while (len) {
         size_t bytes_to_write = (r->max_processing_chunk && r->max_processing_chunk < len) ? r->max_processing_chunk : len;
-        if (r->update_cksum) r->update_cksum(r,buf,bytes_to_write);
+        if (r->update_cksum) r->update_cksum(r,buf,bytes_to_write);     //checksum
         if (r->write(r,buf,bytes_to_write) == 0)
             return 0;
-        buf = (char*)buf + bytes_to_write;
-        len -= bytes_to_write;
-        r->processed_bytes += bytes_to_write;
+        buf = (char*)buf + bytes_to_write;  //移动到下次要读的位置
+        len -= bytes_to_write;      //计算下次要读的字节数
+        r->processed_bytes += bytes_to_write;   //已写入的字节数
     }
     return 1;
 }
@@ -109,9 +110,9 @@ static inline size_t rioRead(rio *r, void *buf, size_t len) {
         if (r->read(r,buf,bytes_to_read) == 0)
             return 0;
         if (r->update_cksum) r->update_cksum(r,buf,bytes_to_read);
-        buf = (char*)buf + bytes_to_read;
-        len -= bytes_to_read;
-        r->processed_bytes += bytes_to_read;
+        buf = (char*)buf + bytes_to_read; //计算下次要写的位置
+        len -= bytes_to_read;               //计算下次要写的字节数
+        r->processed_bytes += bytes_to_read;    //已写入的字节数
     }
     return 1;
 }
