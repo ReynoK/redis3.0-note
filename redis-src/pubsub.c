@@ -48,6 +48,7 @@ int listMatchPubsubPattern(void *a, void *b) {
 }
 
 /* Return the number of channels + patterns a client is subscribed to. */
+//获取订阅channels和pattern的总数
 int clientSubscriptionsCount(redisClient *c) {
     return dictSize(c->pubsub_channels)+
            listLength(c->pubsub_patterns);
@@ -55,6 +56,7 @@ int clientSubscriptionsCount(redisClient *c) {
 
 /* Subscribe a client to a channel. Returns 1 if the operation succeeded, or
  * 0 if the client was already subscribed to that channel. */
+//订阅频道
 int pubsubSubscribeChannel(redisClient *c, robj *channel) {
     dictEntry *de;
     list *clients = NULL;
@@ -67,12 +69,14 @@ int pubsubSubscribeChannel(redisClient *c, robj *channel) {
         /* Add the client to the channel -> list of clients hash table */
         de = dictFind(server.pubsub_channels,channel);
         if (de == NULL) {
+            //不存在列表，则创建一个链表
             clients = listCreate();
             dictAdd(server.pubsub_channels,channel,clients);
             incrRefCount(channel);
         } else {
             clients = dictGetVal(de);
         }
+        //添加客户端
         listAddNodeTail(clients,c);
     }
     /* Notify the client */
@@ -85,6 +89,7 @@ int pubsubSubscribeChannel(redisClient *c, robj *channel) {
 
 /* Unsubscribe a client from a channel. Returns 1 if the operation succeeded, or
  * 0 if the client was not subscribed to the specified channel. */
+//取消订阅
 int pubsubUnsubscribeChannel(redisClient *c, robj *channel, int notify) {
     dictEntry *de;
     list *clients;
@@ -92,6 +97,7 @@ int pubsubUnsubscribeChannel(redisClient *c, robj *channel, int notify) {
     int retval = 0;
 
     /* Remove the channel from the client -> channels hash table */
+    //增加引用， 防止被析构
     incrRefCount(channel); /* channel may be just a pointer to the same object
                             we have in the hash tables. Protect it... */
     if (dictDelete(c->pubsub_channels,channel) == DICT_OK) {
@@ -104,6 +110,7 @@ int pubsubUnsubscribeChannel(redisClient *c, robj *channel, int notify) {
         redisAssertWithInfo(c,NULL,ln != NULL);
         listDelNode(clients,ln);
         if (listLength(clients) == 0) {
+            //如果订阅客户为0，则删除该键
             /* Free the list and associated hash entry at all if this was
              * the latest client, so that it will be possible to abuse
              * Redis PUBSUB creating millions of channels. */
@@ -124,18 +131,19 @@ int pubsubUnsubscribeChannel(redisClient *c, robj *channel, int notify) {
 }
 
 /* Subscribe a client to a pattern. Returns 1 if the operation succeeded, or 0 if the client was already subscribed to that pattern. */
+//模式订阅
 int pubsubSubscribePattern(redisClient *c, robj *pattern) {
     int retval = 0;
 
     if (listSearchKey(c->pubsub_patterns,pattern) == NULL) {
         retval = 1;
         pubsubPattern *pat;
-        listAddNodeTail(c->pubsub_patterns,pattern);
+        listAddNodeTail(c->pubsub_patterns,pattern); //redisClient也记录下订阅模式
         incrRefCount(pattern);
         pat = zmalloc(sizeof(*pat));
         pat->pattern = getDecodedObject(pattern);
         pat->client = c;
-        listAddNodeTail(server.pubsub_patterns,pat);
+        listAddNodeTail(server.pubsub_patterns, pat); //添加新模式订阅到链表尾部
     }
     /* Notify the client */
     addReply(c,shared.mbulkhdr[3]);
@@ -147,18 +155,19 @@ int pubsubSubscribePattern(redisClient *c, robj *pattern) {
 
 /* Unsubscribe a client from a channel. Returns 1 if the operation succeeded, or
  * 0 if the client was not subscribed to the specified channel. */
+//取消订阅
 int pubsubUnsubscribePattern(redisClient *c, robj *pattern, int notify) {
     listNode *ln;
     pubsubPattern pat;
     int retval = 0;
-
+    //防止被析构
     incrRefCount(pattern); /* Protect the object. May be the same we remove */
     if ((ln = listSearchKey(c->pubsub_patterns,pattern)) != NULL) {
         retval = 1;
-        listDelNode(c->pubsub_patterns,ln);
+        listDelNode(c->pubsub_patterns, ln); //从客户端对象中删除
         pat.client = c;
         pat.pattern = pattern;
-        ln = listSearchKey(server.pubsub_patterns,&pat);
+        ln = listSearchKey(server.pubsub_patterns,&pat);  //从服务器对象中删除 
         listDelNode(server.pubsub_patterns,ln);
     }
     /* Notify the client */
@@ -175,11 +184,12 @@ int pubsubUnsubscribePattern(redisClient *c, robj *pattern, int notify) {
 
 /* Unsubscribe from all the channels. Return the number of channels the
  * client was subscribed to. */
+//取消所有指定客户端订阅的频道
 int pubsubUnsubscribeAllChannels(redisClient *c, int notify) {
     dictIterator *di = dictGetSafeIterator(c->pubsub_channels);
     dictEntry *de;
     int count = 0;
-
+    //每个订阅频道都遍历一遍
     while((de = dictNext(di)) != NULL) {
         robj *channel = dictGetKey(de);
 
@@ -196,7 +206,7 @@ int pubsubUnsubscribeAllChannels(redisClient *c, int notify) {
     dictReleaseIterator(di);
     return count;
 }
-
+//取消所有指定客户端订阅的模式
 /* Unsubscribe from all the patterns. Return the number of patterns the
  * client was subscribed from. */
 int pubsubUnsubscribeAllPatterns(redisClient *c, int notify) {
@@ -204,7 +214,7 @@ int pubsubUnsubscribeAllPatterns(redisClient *c, int notify) {
     listIter li;
     int count = 0;
 
-    listRewind(c->pubsub_patterns,&li);
+    listRewind(c->pubsub_patterns,&li);  //从客户端对象中获取客户端订阅的模式
     while ((ln = listNext(&li)) != NULL) {
         robj *pattern = ln->value;
 
@@ -222,6 +232,7 @@ int pubsubUnsubscribeAllPatterns(redisClient *c, int notify) {
 }
 
 /* Publish a message */
+//发布消息
 int pubsubPublishMessage(robj *channel, robj *message) {
     int receivers = 0;
     dictEntry *de;
@@ -236,6 +247,7 @@ int pubsubPublishMessage(robj *channel, robj *message) {
         listIter li;
 
         listRewind(list,&li);
+        //遍历列表，发布消息
         while ((ln = listNext(&li)) != NULL) {
             redisClient *c = ln->value;
 
@@ -247,12 +259,13 @@ int pubsubPublishMessage(robj *channel, robj *message) {
         }
     }
     /* Send to clients listening to matching channels */
+    //查看订阅模式
     if (listLength(server.pubsub_patterns)) {
         listRewind(server.pubsub_patterns,&li);
         channel = getDecodedObject(channel);
         while ((ln = listNext(&li)) != NULL) {
             pubsubPattern *pat = ln->value;
-
+            //正泽比较
             if (stringmatchlen((char*)pat->pattern->ptr,
                                 sdslen(pat->pattern->ptr),
                                 (char*)channel->ptr,
@@ -273,15 +286,15 @@ int pubsubPublishMessage(robj *channel, robj *message) {
 /*-----------------------------------------------------------------------------
  * Pubsub commands implementation
  *----------------------------------------------------------------------------*/
-
+//订阅频道命令
 void subscribeCommand(redisClient *c) {
     int j;
 
     for (j = 1; j < c->argc; j++)
         pubsubSubscribeChannel(c,c->argv[j]);
-    c->flags |= REDIS_PUBSUB;
+    c->flags |= REDIS_PUBSUB;  //客户端为订阅模式
 }
-
+//取消订阅 
 void unsubscribeCommand(redisClient *c) {
     if (c->argc == 1) {
         pubsubUnsubscribeAllChannels(c,1);
@@ -293,7 +306,7 @@ void unsubscribeCommand(redisClient *c) {
     }
     if (clientSubscriptionsCount(c) == 0) c->flags &= ~REDIS_PUBSUB;
 }
-
+//模式订阅
 void psubscribeCommand(redisClient *c) {
     int j;
 
@@ -301,6 +314,7 @@ void psubscribeCommand(redisClient *c) {
         pubsubSubscribePattern(c,c->argv[j]);
     c->flags |= REDIS_PUBSUB;
 }
+//取消订阅模式
 
 void punsubscribeCommand(redisClient *c) {
     if (c->argc == 1) {
@@ -313,7 +327,7 @@ void punsubscribeCommand(redisClient *c) {
     }
     if (clientSubscriptionsCount(c) == 0) c->flags &= ~REDIS_PUBSUB;
 }
-
+//发布消息
 void publishCommand(redisClient *c) {
     int receivers = pubsubPublishMessage(c->argv[1],c->argv[2]);
     if (server.cluster_enabled)
@@ -322,7 +336,7 @@ void publishCommand(redisClient *c) {
         forceCommandPropagation(c,REDIS_PROPAGATE_REPL);
     addReplyLongLong(c,receivers);
 }
-
+//pubsub命令
 /* PUBSUB command for Pub/Sub introspection. */
 void pubsubCommand(redisClient *c) {
     if (!strcasecmp(c->argv[1]->ptr,"channels") &&

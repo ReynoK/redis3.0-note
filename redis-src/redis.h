@@ -612,8 +612,8 @@ typedef struct redisClient {
     blockingState bpop;     /* blocking state */
     long long woff;         /* Last write global replication offset. */
     list *watched_keys;     /* Keys WATCHED for MULTI/EXEC CAS */
-    dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
-    list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */
+    dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */  //订阅频道，用字典保存，键是频道名称，值是订阅的客户端列表
+    list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */ //模式订阅
     sds peerid;             /* Cached peer ID. */
 
     /* Response buffer */
