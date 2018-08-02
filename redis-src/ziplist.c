@@ -200,10 +200,12 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
         /* Although encoding is given it may not be set for strings,
          * so we determine it here using the raw length. */
         //通过字符串长度来判断编码类型
-        if (rawlen <= 0x3f) {           //1字节长可表示
+        if (rawlen <= 0x3f)
+        { //1字节长可表示  长度最大为 0011 1111()ox3f
             if (!p) return len;
             buf[0] = ZIP_STR_06B | rawlen;      //保存长度
-        } else if (rawlen <= 0x3fff) {
+        } else if (rawlen <= 0x3fff)
+        { //长度最大为 0011 1111 1111 1111
             len += 1;
             if (!p) return len;
             buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);      //取前6位，然后组成的第一个字节
@@ -211,7 +213,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
         } else {
             len += 4;
             if (!p) return len;
-            //计算各个字节怎么存
+            //计算各个字节怎么存  10开头
             buf[0] = ZIP_STR_32B;
             buf[1] = (rawlen >> 24) & 0xff;
             buf[2] = (rawlen >> 16) & 0xff;
@@ -335,7 +337,7 @@ static unsigned int zipRawEntryLength(unsigned char *p) {
 
 /* Check if string pointed to by 'entry' can be encoded as an integer.
  * Stores the integer value in 'v' and its encoding in 'encoding'. */
-//判断该数字字符串能否被编码
+//判断该数字字符串能否被编码以及编码类型
 static int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long *v, unsigned char *encoding) {
     long long value;
 
@@ -627,7 +629,7 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     }
 
     /* See if the entry can be encoded */
-    if (zipTryEncoding(s,slen,&value,&encoding)) {
+    if (zipTryEncoding(s,slen,&value,&encoding)) {          //尝试对当前的值进行整数编码
         /* 'encoding' is set to the appropriate integer encoding */
         reqlen = zipIntSize(encoding);          //需要存储当前节点值需要的字节数
     } else {
@@ -643,7 +645,7 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     /* When the insert position is not equal to the tail, we need to
      * make sure that the next entry can hold this entry's length in
      * its prevlen field. */
-    nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) : 0;
+    nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p, reqlen) : 0; //看是否会引起后面节点的长度变化
 
     /* Store offset because a realloc may change the address of zl. */
     offset = p-zl;
@@ -695,6 +697,7 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     return zl;
 }
 
+//添加到表头或表尾
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, unsigned int slen, int where) {
     unsigned char *p;
     p = (where == ZIPLIST_HEAD) ? ZIPLIST_ENTRY_HEAD(zl) : ZIPLIST_ENTRY_END(zl);

@@ -175,7 +175,7 @@ void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
 /* Write the buffer (possibly composed of multiple blocks) into the specified
  * fd. If a short write or any other error happens -1 is returned,
  * otherwise the number of bytes written is returned. */
-//将重写缓冲区的数据写入文件
+//将重写缓冲区的数据写入文件，在子进程rewrite成功后，在父进程会调用到这里
 ssize_t aofRewriteBufferWrite(int fd) {
     listNode *ln;
     listIter li;
