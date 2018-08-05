@@ -32,12 +32,14 @@
 /* ================================ MULTI/EXEC ============================== */
 
 /* Client state initialization for MULTI/EXEC */
+//事务初始化
 void initClientMultiState(redisClient *c) {
     c->mstate.commands = NULL;
     c->mstate.count = 0;
 }
 
 /* Release all the resources associated with MULTI/EXEC state */
+//释放整个事务占用的资源
 void freeClientMultiState(redisClient *c) {
     int j;
 
@@ -46,29 +48,30 @@ void freeClientMultiState(redisClient *c) {
         multiCmd *mc = c->mstate.commands+j;
 
         for (i = 0; i < mc->argc; i++)
-            decrRefCount(mc->argv[i]);
-        zfree(mc->argv);
+            decrRefCount(mc->argv[i]);  //释放每个命令参数
+        zfree(mc->argv);                  //释放指针数组
     }
     zfree(c->mstate.commands);
 }
 
 /* Add a new command into the MULTI commands queue */
+//事务命令入队列        
 void queueMultiCommand(redisClient *c) {
     multiCmd *mc;
     int j;
 
     c->mstate.commands = zrealloc(c->mstate.commands,
-            sizeof(multiCmd)*(c->mstate.count+1));
-    mc = c->mstate.commands+c->mstate.count;
+            sizeof(multiCmd)*(c->mstate.count+1));//重分配内存大小
+    mc = c->mstate.commands+c->mstate.count;        
     mc->cmd = c->cmd;
     mc->argc = c->argc;
     mc->argv = zmalloc(sizeof(robj*)*c->argc);
-    memcpy(mc->argv,c->argv,sizeof(robj*)*c->argc);
+    memcpy(mc->argv,c->argv,sizeof(robj*)*c->argc);     //复制参数列表
     for (j = 0; j < c->argc; j++)
-        incrRefCount(mc->argv[j]);
+        incrRefCount(mc->argv[j]);                      //增加引用
     c->mstate.count++;
 }
-
+//丢弃整个事务命令
 void discardTransaction(redisClient *c) {
     freeClientMultiState(c);
     initClientMultiState(c);
@@ -78,20 +81,22 @@ void discardTransaction(redisClient *c) {
 
 /* Flag the transacation as DIRTY_EXEC so that EXEC will fail.
  * Should be called every time there is an error while queueing a command. */
+//事务中的命令会失败的标志
 void flagTransaction(redisClient *c) {
     if (c->flags & REDIS_MULTI)
         c->flags |= REDIS_DIRTY_EXEC;
 }
 
+//当前处于multi
 void multiCommand(redisClient *c) {
     if (c->flags & REDIS_MULTI) {
-        addReplyError(c,"MULTI calls can not be nested");
+        addReplyError(c,"MULTI calls can not be nested");       //multi中不允许再调用multi
         return;
     }
     c->flags |= REDIS_MULTI;
     addReply(c,shared.ok);
 }
-
+//丢弃事务标志位
 void discardCommand(redisClient *c) {
     if (!(c->flags & REDIS_MULTI)) {
         addReplyError(c,"DISCARD without MULTI");
@@ -118,7 +123,7 @@ void execCommand(redisClient *c) {
     struct redisCommand *orig_cmd;
     int must_propagate = 0; /* Need to propagate MULTI/EXEC to AOF / slaves? */
 
-    if (!(c->flags & REDIS_MULTI)) {
+    if (!(c->flags & REDIS_MULTI)) {            //判断是否处于事务中
         addReplyError(c,"EXEC without MULTI");
         return;
     }
@@ -132,7 +137,7 @@ void execCommand(redisClient *c) {
     if (c->flags & (REDIS_DIRTY_CAS|REDIS_DIRTY_EXEC)) {
         addReply(c, c->flags & REDIS_DIRTY_EXEC ? shared.execaborterr :
                                                   shared.nullmultibulk);
-        discardTransaction(c);
+        discardTransaction(c);  //丢弃事务
         goto handle_monitor;
     }
 
@@ -159,6 +164,7 @@ void execCommand(redisClient *c) {
         call(c,REDIS_CALL_FULL);
 
         /* Commands may alter argc/argv, restore mstate. */
+        //再保存参数，参数可能被更改？
         c->mstate.commands[j].argc = c->argc;
         c->mstate.commands[j].argv = c->argv;
         c->mstate.commands[j].cmd = c->cmd;
@@ -195,10 +201,11 @@ handle_monitor:
  * DB */
 typedef struct watchedKey {
     robj *key;
-    redisDb *db;
+    redisDb *db;  //记录对应哪一个db
 } watchedKey;
 
 /* Watch for the specified key */
+//添加watchkey
 void watchForKey(redisClient *c, robj *key) {
     list *clients = NULL;
     listIter li;
@@ -206,6 +213,7 @@ void watchForKey(redisClient *c, robj *key) {
     watchedKey *wk;
 
     /* Check if we are already watching for this key */
+    //查看key是否在client的watched_keys列表中
     listRewind(c->watched_keys,&li);
     while((ln = listNext(&li))) {
         wk = listNodeValue(ln);
@@ -213,8 +221,10 @@ void watchForKey(redisClient *c, robj *key) {
             return; /* Key already watched */
     }
     /* This key is not already watched in this DB. Let's add it */
+    //获取当前db 的watched_keys字典key对应的clietns列表
     clients = dictFetchValue(c->db->watched_keys,key);
     if (!clients) {
+        //如果不存在，则新创
         clients = listCreate();
         dictAdd(c->db->watched_keys,key,clients);
         incrRefCount(key);
@@ -230,6 +240,7 @@ void watchForKey(redisClient *c, robj *key) {
 
 /* Unwatch all the keys watched by this client. To clean the EXEC dirty
  * flag is up to the caller. */
+//unwatch所有key
 void unwatchAllKeys(redisClient *c) {
     listIter li;
     listNode *ln;

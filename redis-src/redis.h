@@ -234,7 +234,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define REDIS_MONITOR (1<<2) /* This client is a slave monitor, see MONITOR */
 #define REDIS_MULTI (1<<3)   /* This client is in a MULTI context */
 #define REDIS_BLOCKED (1<<4) /* The client is waiting in a blocking operation */
-#define REDIS_DIRTY_CAS (1<<5) /* Watched keys modified. EXEC will fail. */
+#define REDIS_DIRTY_CAS (1<<5) /* Watched keys modified. EXEC will fail. */  //wathch 的key已经被更改
 #define REDIS_CLOSE_AFTER_REPLY (1<<6) /* Close after writing entire reply. */
 #define REDIS_UNBLOCKED (1<<7) /* This client was unblocked and is stored in
                                   server.unblocked_clients */
@@ -521,14 +521,14 @@ typedef struct redisDb {
 
 /* Client MULTI/EXEC state */
 typedef struct multiCmd {
-    robj **argv;
-    int argc;
-    struct redisCommand *cmd;
+    robj **argv;        //命令参数
+    int argc;           // 参数数量
+    struct redisCommand *cmd;   
 } multiCmd;
 
 typedef struct multiState {
-    multiCmd *commands;     /* Array of MULTI commands */
-    int count;              /* Total number of MULTI commands */
+    multiCmd *commands;     /* Array of MULTI commands */   //事务命令，FIFO队列
+    int count;              /* Total number of MULTI commands */        //命令数量
     int minreplicas;        /* MINREPLICAS for synchronous replication */
     time_t minreplicas_timeout; /* MINREPLICAS timeout as unixtime. */
 } multiState;
@@ -607,7 +607,7 @@ typedef struct redisClient {
     char replrunid[REDIS_RUN_ID_SIZE+1]; /* master run id if this is a master */
     int slave_listening_port; /* As configured with: SLAVECONF listening-port */
     int slave_capa;         /* Slave capabilities: SLAVE_CAPA_* bitwise OR. */
-    multiState mstate;      /* MULTI/EXEC state */
+    multiState mstate;      /* MULTI/EXEC state */          //事务状态
     int btype;              /* Type of blocking op if REDIS_BLOCKED. */
     blockingState bpop;     /* blocking state */
     long long woff;         /* Last write global replication offset. */
@@ -977,20 +977,21 @@ typedef struct pubsubPattern {
 
 typedef void redisCommandProc(redisClient *c);
 typedef int *redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, int *numkeys);
+//命令查找器
 struct redisCommand {
-    char *name;
-    redisCommandProc *proc;
-    int arity;
-    char *sflags; /* Flags as string representation, one char per flag. */
-    int flags;    /* The actual flags, obtained from the 'sflags' field. */
+    char *name;     //命令名称
+    redisCommandProc *proc;  //函数指针
+    int arity;          //命令参数个数
+    char *sflags; /* Flags as string representation, one char per flag. */        //标识字符串表示
+    int flags;    /* The actual flags, obtained from the 'sflags' field. */        //标识数字表示
     /* Use a function to determine keys arguments in a command line.
      * Used for Redis Cluster redirect. */
-    redisGetKeysProc *getkeys_proc;
+    redisGetKeysProc *getkeys_proc;                         
     /* What keys should be loaded in background when calling this command? */
-    int firstkey; /* The first argument that's a key (0 = no keys) */
-    int lastkey;  /* The last argument that's a key */
-    int keystep;  /* The step between first and last key */
-    long long microseconds, calls;
+    int firstkey; /* The first argument that's a key (0 = no keys) */           //指明命令 第一个key的位置
+    int lastkey;  /* The last argument that's a key */                          //指明命令 最后一个key的位置
+    int keystep; /* The step between first and last key */                      //指明每个key之间的step     比如 GET key       3个值分别是[1,1,1]  MSET key value [key value ...]   3个值分别是 [1,-1,2]
+    long long microseconds, calls;                              //microseconds 总调用时间   calls总调用总次数
 };
 
 struct redisFunctionSym {
