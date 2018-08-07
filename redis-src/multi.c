@@ -314,7 +314,7 @@ void touchWatchedKeysOnFlush(int dbid) {
         }
     }
 }
-
+//watch命令
 void watchCommand(redisClient *c) {
     int j;
 
@@ -326,7 +326,7 @@ void watchCommand(redisClient *c) {
         watchForKey(c,c->argv[j]);
     addReply(c,shared.ok);
 }
-
+//watch命令
 void unwatchCommand(redisClient *c) {
     unwatchAllKeys(c);
     c->flags &= (~REDIS_DIRTY_CAS);
